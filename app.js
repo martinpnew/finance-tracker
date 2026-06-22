@@ -4,11 +4,10 @@ document.getElementById("spendDate").value = todayString;
 
 let deferredInstallPrompt = null;
 let state = loadState();
+let editingAccountId = null;
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js");
-  });
+  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
 }
 
 window.addEventListener("beforeinstallprompt", event => {
@@ -28,25 +27,15 @@ document.getElementById("installButton").addEventListener("click", async () => {
 function loadState() {
   const saved = localStorage.getItem(storageKey);
   if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return { accounts: [], spending: [] };
-    }
+    try { return JSON.parse(saved); } catch { return { accounts: [], spending: [] }; }
   }
   return { accounts: [], spending: [] };
 }
 
-function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(state));
-}
+function saveState() { localStorage.setItem(storageKey, JSON.stringify(state)); }
 
 function money(value) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    maximumFractionDigits: 0
-  }).format(value || 0);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value || 0);
 }
 
 function showTab(id, button) {
@@ -57,7 +46,7 @@ function showTab(id, button) {
   renderAll();
 }
 
-function addAccount() {
+function saveAccount() {
   const name = document.getElementById("accountName").value.trim();
   const owner = document.getElementById("accountOwner").value;
   const type = document.getElementById("accountType").value;
@@ -71,27 +60,56 @@ function addAccount() {
     return;
   }
 
-  state.accounts.push({
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    name,
-    owner,
-    type,
-    balance,
-    rate,
-    monthlyContribution,
-    monthlyWithdrawal
-  });
+  const accountData = { name, owner, type, balance, rate, monthlyContribution, monthlyWithdrawal };
 
-  ["accountName", "accountBalance", "accountRate", "monthlyContribution", "monthlyWithdrawal"].forEach(id => {
-    document.getElementById(id).value = "";
-  });
+  if (editingAccountId) {
+    state.accounts = state.accounts.map(account =>
+      account.id === editingAccountId ? { ...account, ...accountData } : account
+    );
+  } else {
+    state.accounts.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      ...accountData
+    });
+  }
 
+  cancelAccountEdit();
   saveState();
   renderAll();
 }
 
+function editAccount(id) {
+  const account = state.accounts.find(account => account.id === id);
+  if (!account) return;
+
+  editingAccountId = id;
+  document.getElementById("accountName").value = account.name || "";
+  document.getElementById("accountOwner").value = account.owner || "Me";
+  document.getElementById("accountType").value = account.type || "Other";
+  document.getElementById("accountBalance").value = account.balance ?? "";
+  document.getElementById("accountRate").value = account.rate ?? "";
+  document.getElementById("monthlyContribution").value = account.monthlyContribution ?? "";
+  document.getElementById("monthlyWithdrawal").value = account.monthlyWithdrawal ?? "";
+
+  document.getElementById("accountSubmitButton").textContent = "Save changes";
+  document.getElementById("cancelEditButton").style.display = "inline-block";
+  window.scrollTo({ top: 0, behaviour: "smooth" });
+  document.getElementById("accountName").focus();
+}
+
+function cancelAccountEdit() {
+  editingAccountId = null;
+  ["accountName", "accountBalance", "accountRate", "monthlyContribution", "monthlyWithdrawal"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("accountOwner").value = "Me";
+  document.getElementById("accountType").value = "Current account";
+  document.getElementById("accountSubmitButton").textContent = "Add account";
+  document.getElementById("cancelEditButton").style.display = "none";
+}
+
 function deleteAccount(id) {
+  if (!confirm("Delete this account?")) return;
   state.accounts = state.accounts.filter(account => account.id !== id);
+  if (editingAccountId === id) cancelAccountEdit();
   saveState();
   renderAll();
 }
@@ -107,17 +125,9 @@ function addSpending() {
     return;
   }
 
-  state.spending.push({
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    date,
-    category,
-    amount,
-    note
-  });
-
+  state.spending.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), date, category, amount, note });
   document.getElementById("spendAmount").value = "";
   document.getElementById("spendNote").value = "";
-
   saveState();
   renderAll();
 }
@@ -156,13 +166,7 @@ function loadSampleData() {
 }
 
 function exportData() {
-  const backup = {
-    app: "Finance tracker",
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    data: state
-  };
-
+  const backup = { app: "Finance tracker", version: 3, exportedAt: new Date().toISOString(), data: state };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -175,7 +179,6 @@ function exportData() {
 function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = () => {
     try {
@@ -199,28 +202,21 @@ function importData(event) {
 
 function monthlySpendingTotal() {
   const ym = new Date().toISOString().slice(0, 7);
-  return state.spending
-    .filter(item => item.date && item.date.slice(0, 7) === ym)
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return state.spending.filter(item => item.date && item.date.slice(0, 7) === ym).reduce((sum, item) => sum + Number(item.amount || 0), 0);
 }
 
 function forecastMonths(months) {
   let balances = state.accounts.map(account => ({ ...account }));
   const points = [];
-
   for (let m = 0; m <= months; m++) {
     const total = balances.reduce((sum, account) => sum + account.balance, 0);
     points.push(total);
-
     balances = balances.map(account => {
       const monthlyRate = Math.pow(1 + (Number(account.rate || 0) / 100), 1 / 12) - 1;
-      const nextBalance = account.balance * (1 + monthlyRate)
-        + Number(account.monthlyContribution || 0)
-        - Number(account.monthlyWithdrawal || 0);
+      const nextBalance = account.balance * (1 + monthlyRate) + Number(account.monthlyContribution || 0) - Number(account.monthlyWithdrawal || 0);
       return { ...account, balance: Math.max(0, nextBalance) };
     });
   }
-
   return points;
 }
 
@@ -229,7 +225,6 @@ function renderDashboard() {
   const growth = state.accounts.reduce((sum, account) => sum + Number(account.balance || 0) * Number(account.rate || 0) / 100, 0);
   const spend = monthlySpendingTotal();
   const twelveMonth = forecastMonths(12).at(-1);
-
   document.getElementById("totalBalance").textContent = money(total);
   document.getElementById("annualGrowth").textContent = money(growth);
   document.getElementById("monthlySpend").textContent = money(spend);
@@ -242,19 +237,9 @@ function renderAccounts() {
     container.innerHTML = '<div class="empty">No accounts added yet.</div>';
     return;
   }
-
   container.innerHTML = `
     <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Owner</th>
-          <th>Type</th>
-          <th>Rate</th>
-          <th>Balance</th>
-          <th></th>
-        </tr>
-      </thead>
+      <thead><tr><th>Name</th><th>Owner</th><th>Type</th><th>Rate</th><th>Balance</th><th></th></tr></thead>
       <tbody>
         ${state.accounts.map(account => `
           <tr>
@@ -263,47 +248,20 @@ function renderAccounts() {
             <td>${escapeHtml(account.type)}</td>
             <td>${Number(account.rate || 0).toFixed(2)}%</td>
             <td>${money(account.balance)}</td>
-            <td><button class="danger" onclick="deleteAccount('${account.id}')">Delete</button></td>
-          </tr>
-        `).join("")}
+            <td><div class="button-row" style="justify-content:flex-end"><button class="secondary" onclick="editAccount('${account.id}')">Edit</button><button class="danger" onclick="deleteAccount('${account.id}')">Delete</button></div></td>
+          </tr>`).join("")}
       </tbody>
-    </table>
-  `;
+    </table>`;
 }
 
 function renderSpending() {
   const container = document.getElementById("spendingTable");
   const items = [...state.spending].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
-
   if (!items.length) {
     container.innerHTML = '<div class="empty">No spending added yet.</div>';
     return;
   }
-
-  container.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Category</th>
-          <th>Note</th>
-          <th>Amount</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.map(item => `
-          <tr>
-            <td>${escapeHtml(item.date)}</td>
-            <td>${escapeHtml(item.category)}</td>
-            <td>${escapeHtml(item.note || "")}</td>
-            <td>${money(item.amount)}</td>
-            <td><button class="danger" onclick="deleteSpending('${item.id}')">Delete</button></td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-  `;
+  container.innerHTML = `<table><thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.category)}</td><td>${escapeHtml(item.note || "")}</td><td>${money(item.amount)}</td><td><button class="danger" onclick="deleteSpending('${item.id}')">Delete</button></td></tr>`).join("")}</tbody></table>`;
 }
 
 function renderForecastSummary() {
@@ -314,17 +272,7 @@ function renderForecastSummary() {
   const difference = end - start;
   const inflation = Number(document.getElementById("inflationRate").value || 0) / 100;
   const realEnd = end / Math.pow(1 + inflation, years);
-
-  document.getElementById("forecastSummary").innerHTML = `
-    <table>
-      <tbody>
-        <tr><th>Starting balance</th><td>${money(start)}</td></tr>
-        <tr><th>Projected balance after ${years} years</th><td>${money(end)}</td></tr>
-        <tr><th>Change</th><td class="${difference >= 0 ? "positive" : "negative"}">${money(difference)}</td></tr>
-        <tr><th>Inflation-adjusted estimate</th><td>${money(realEnd)}</td></tr>
-      </tbody>
-    </table>
-  `;
+  document.getElementById("forecastSummary").innerHTML = `<table><tbody><tr><th>Starting balance</th><td>${money(start)}</td></tr><tr><th>Projected balance after ${years} years</th><td>${money(end)}</td></tr><tr><th>Change</th><td class="${difference >= 0 ? "positive" : "negative"}">${money(difference)}</td></tr><tr><th>Inflation-adjusted estimate</th><td>${money(realEnd)}</td></tr></tbody></table>`;
 }
 
 function drawBarChart(canvasId, labels, values) {
@@ -333,41 +281,17 @@ function drawBarChart(canvasId, labels, values) {
   const ctx = setupCanvas(canvas);
   const rect = canvas.getBoundingClientRect();
   ctx.clearRect(0, 0, rect.width, rect.height);
-
-  if (!values.length || Math.max(...values) <= 0) {
-    drawEmpty(ctx, rect, "No data yet");
-    return;
-  }
-
-  const width = rect.width;
-  const height = rect.height;
-  const padding = 36;
-  const max = Math.max(...values);
+  if (!values.length || Math.max(...values) <= 0) { drawEmpty(ctx, rect, "No data yet"); return; }
+  const width = rect.width, height = rect.height, padding = 36, max = Math.max(...values);
   const barWidth = (width - padding * 2) / values.length * 0.65;
-
-  ctx.font = "12px system-ui";
-  ctx.strokeStyle = "#d9dde5";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(padding, height - padding);
-  ctx.lineTo(width - padding, height - padding);
-  ctx.stroke();
-
+  ctx.font = "12px system-ui"; ctx.strokeStyle = "#d9dde5"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padding, height - padding); ctx.lineTo(width - padding, height - padding); ctx.stroke();
   values.forEach((value, i) => {
     const x = padding + i * ((width - padding * 2) / values.length) + barWidth * 0.25;
     const barHeight = (value / max) * (height - padding * 2);
     const y = height - padding - barHeight;
-
-    ctx.fillStyle = "#2563eb";
-    ctx.fillRect(x, y, barWidth, barHeight);
-
-    ctx.fillStyle = "#667085";
-    ctx.save();
-    ctx.translate(x + barWidth / 2, height - 8);
-    ctx.rotate(-0.35);
-    ctx.textAlign = "right";
-    ctx.fillText(labels[i].slice(0, 16), 0, 0);
-    ctx.restore();
+    ctx.fillStyle = "#2563eb"; ctx.fillRect(x, y, barWidth, barHeight);
+    ctx.fillStyle = "#667085"; ctx.save(); ctx.translate(x + barWidth / 2, height - 8); ctx.rotate(-0.35); ctx.textAlign = "right"; ctx.fillText(labels[i].slice(0, 16), 0, 0); ctx.restore();
   });
 }
 
@@ -377,43 +301,18 @@ function drawLineChart(canvasId, points) {
   const ctx = setupCanvas(canvas);
   const rect = canvas.getBoundingClientRect();
   ctx.clearRect(0, 0, rect.width, rect.height);
-
-  if (!points.length || Math.max(...points) <= 0) {
-    drawEmpty(ctx, rect, "No data yet");
-    return;
-  }
-
-  const width = rect.width;
-  const height = rect.height;
-  const padding = 36;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-
-  ctx.strokeStyle = "#d9dde5";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(padding, height - padding);
-  ctx.lineTo(width - padding, height - padding);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#2563eb";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-
+  if (!points.length || Math.max(...points) <= 0) { drawEmpty(ctx, rect, "No data yet"); return; }
+  const width = rect.width, height = rect.height, padding = 36;
+  const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
+  ctx.strokeStyle = "#d9dde5"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padding, height - padding); ctx.lineTo(width - padding, height - padding); ctx.stroke();
+  ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 4; ctx.beginPath();
   points.forEach((point, i) => {
     const x = padding + (i / (points.length - 1)) * (width - padding * 2);
     const y = height - padding - ((point - min) / range) * (height - padding * 2);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
-
   ctx.stroke();
-
-  ctx.fillStyle = "#667085";
-  ctx.font = "12px system-ui";
-  ctx.fillText(money(max), padding, 20);
-  ctx.fillText(money(min), padding, height - 10);
+  ctx.fillStyle = "#667085"; ctx.font = "12px system-ui"; ctx.fillText(money(max), padding, 20); ctx.fillText(money(min), padding, height - 10);
 }
 
 function setupCanvas(canvas) {
@@ -436,20 +335,14 @@ function drawEmpty(ctx, rect, text) {
 
 function groupAccountsByType() {
   const grouped = {};
-  state.accounts.forEach(account => {
-    grouped[account.type] = (grouped[account.type] || 0) + Number(account.balance || 0);
-  });
+  state.accounts.forEach(account => { grouped[account.type] = (grouped[account.type] || 0) + Number(account.balance || 0); });
   return grouped;
 }
 
 function groupSpendingThisMonth() {
   const ym = new Date().toISOString().slice(0, 7);
   const grouped = {};
-  state.spending
-    .filter(item => item.date && item.date.slice(0, 7) === ym)
-    .forEach(item => {
-      grouped[item.category] = (grouped[item.category] || 0) + Number(item.amount || 0);
-    });
+  state.spending.filter(item => item.date && item.date.slice(0, 7) === ym).forEach(item => { grouped[item.category] = (grouped[item.category] || 0) + Number(item.amount || 0); });
   return grouped;
 }
 
@@ -457,10 +350,8 @@ function renderCharts() {
   const typeGroups = groupAccountsByType();
   drawBarChart("typeChart", Object.keys(typeGroups), Object.values(typeGroups));
   drawLineChart("forecastChart", forecastMonths(12));
-
   const spendGroups = groupSpendingThisMonth();
   drawBarChart("spendChart", Object.keys(spendGroups), Object.values(spendGroups));
-
   const years = Math.max(1, Math.min(40, Number(document.getElementById("forecastYears").value || 10)));
   drawLineChart("longForecastChart", forecastMonths(years * 12).filter((_, i) => i % 12 === 0));
 }
@@ -474,12 +365,7 @@ function renderAll() {
 }
 
 function escapeHtml(text) {
-  return String(text)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(text).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 
 window.addEventListener("resize", renderCharts);
