@@ -1,10 +1,11 @@
-# Finance tracker PWA
+# My Finance PWA
 
-This is a simple private finance tracker.
+Version 4 updates:
 
-## Version 3 update
-
-- Added account editing
-- Added save/cancel edit flow
-- Added confirmation before account deletion
-- Keeps existing phone data because it uses the same local storage key
+- Renamed the app to My Finance
+- Added dark mode
+- Added coloured badges and icons for account types
+- Reworked dashboard around net worth
+- Added expandable asset breakdown with readable labels
+- Added monthly net worth snapshots
+- Kept the same local storage key so existing phone data should remain

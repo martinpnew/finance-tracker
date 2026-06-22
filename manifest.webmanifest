@@ -1,7 +1,7 @@
 {
-  "name": "Finance tracker",
-  "short_name": "Finance",
-  "description": "Manual finance tracker with spending, accounts, backups and forecasts.",
+  "name": "My Finance",
+  "short_name": "My Finance",
+  "description": "Manual finance tracker with spending, accounts, snapshots, backups and forecasts.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
