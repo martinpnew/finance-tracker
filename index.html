@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finance tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --text: #17202a;
+      --muted: #667085;
+      --line: #d9dde5;
+      --accent: #2563eb;
+      --danger: #b42318;
+      --good: #027a48;
+      --shadow: 0 10px 30px rgba(16, 24, 40, 0.08);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(245, 246, 248, 0.94);
+      backdrop-filter: blur(8px);
+      padding: 18px 16px 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 { margin: 0 0 4px; font-size: 1.35rem; }
+    .sub { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    main { max-width: 980px; margin: 0 auto; padding: 16px; }
+    nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+    nav button {
+      border: 1px solid var(--line); background: var(--card); color: var(--text);
+      border-radius: 999px; padding: 10px 8px; font-weight: 650; cursor: pointer;
+    }
+    nav button.active { background: var(--accent); color: white; border-color: var(--accent); }
+    section { display: none; }
+    section.active { display: block; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+      padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px;
+    }
+    .stat { min-height: 112px; }
+    .stat-label { color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+    .stat-value { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; }
+    .stat-note { color: var(--muted); margin-top: 8px; font-size: 0.86rem; line-height: 1.35; }
+    h2 { margin: 0 0 12px; font-size: 1.1rem; }
+    label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; font-weight: 650; }
+    input, select {
+      width: 100%; border: 1px solid var(--line); border-radius: 12px;
+      padding: 11px 12px; font-size: 1rem; background: white; color: var(--text); margin-bottom: 10px;
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .button-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .primary, .secondary, .danger {
+      border: none; border-radius: 12px; padding: 11px 14px; font-weight: 750; cursor: pointer;
+    }
+    .primary { background: var(--accent); color: white; }
+    .secondary { background: #eef2ff; color: #1e40af; }
+    .danger { background: #fee4e2; color: var(--danger); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; font-size: 0.92rem; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    td:last-child, th:last-child { text-align: right; }
+    canvas { width: 100%; height: 220px; display: block; }
+    .empty { color: var(--muted); padding: 18px 0; text-align: center; }
+    .small { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+    .positive { color: var(--good); }
+    .negative { color: var(--danger); }
+    .install-banner {
+      display: none; background: #eff6ff; border: 1px solid #bfdbfe;
+      border-radius: 16px; padding: 12px; margin: 12px 0;
+    }
+    .install-banner.show { display: block; }
+    @media (max-width: 720px) {
+      main { padding: 12px; }
+      nav { grid-template-columns: repeat(2, 1fr); }
+      .grid, .form-grid { grid-template-columns: 1fr; }
+      .stat-value { font-size: 1.35rem; }
+      table { font-size: 0.86rem; }
+      th:nth-child(3), td:nth-child(3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Finance tracker</h1>
+    <p class="sub">Manual accounts, spending, backups and forecasts</p>
+    <nav>
+      <button class="active" onclick="showTab('dashboard', this)">Dashboard</button>
+      <button onclick="showTab('accounts', this)">Accounts</button>
+      <button onclick="showTab('spending', this)">Spending</button>
+      <button onclick="showTab('forecast', this)">Forecasts</button>
+    </nav>
+  </header>
+
+  <main>
+    <div id="installBanner" class="install-banner">
+      <strong>Install this app</strong>
+      <p class="small">Add this tracker to your home screen for quick access and offline use.</p>
+      <button class="primary" id="installButton">Install app</button>
+    </div>
+
+    <section id="dashboard" class="active">
+      <div class="grid">
+        <div class="card stat">
+          <div class="stat-label">Total current balance</div>
+          <div class="stat-value" id="totalBalance">£0</div>
+          <div class="stat-note">All bank accounts, savings and investments entered manually.</div>
+        </div>
+        <div class="card stat">
+          <div class="stat-label">Estimated annual interest/growth</div>
+          <div class="stat-value" id="annualGrowth">£0</div>
+          <div class="stat-note">Based on each account’s annual rate.</div>
+        </div>
+        <div class="card stat">
+          <div class="stat-label">Monthly spending</div>
+          <div class="stat-value" id="monthlySpend">£0</div>
+          <div class="stat-note">Uses spending entries for the current month.</div>
+        </div>
+        <div class="card stat">
+          <div class="stat-label">12-month projection</div>
+          <div class="stat-value" id="projection12">£0</div>
+          <div class="stat-note">Balance after contributions, spending and estimated growth.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Balance by account type</h2>
+        <canvas id="typeChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>12-month forecast</h2>
+        <canvas id="forecastChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Backups</h2>
+        <p class="small">Export a backup before changing phone, clearing browser data or making big updates.</p>
+        <div class="button-row">
+          <button class="secondary" onclick="exportData()">Export backup</button>
+          <label class="secondary" style="margin:0; cursor:pointer;">
+            Import backup
+            <input type="file" accept="application/json" onchange="importData(event)" style="display:none" />
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section id="accounts">
+      <div class="card">
+        <h2>Add account or investment</h2>
+        <div class="form-grid">
+          <div>
+            <label for="accountName">Name</label>
+            <input id="accountName" placeholder="e.g. Cash ISA" />
+          </div>
+          <div>
+            <label for="accountOwner">Owner</label>
+            <select id="accountOwner">
+              <option>Me</option>
+              <option>Partner</option>
+              <option>Joint</option>
+            </select>
+          </div>
+          <div>
+            <label for="accountType">Type</label>
+            <select id="accountType">
+              <option>Current account</option>
+              <option>Savings</option>
+              <option>Cash ISA</option>
+              <option>Stocks and shares ISA</option>
+              <option>Premium Bonds</option>
+              <option>Pension</option>
+              <option>Investment</option>
+              <option>Property</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="accountBalance">Current balance (£)</label>
+            <input id="accountBalance" type="number" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="accountRate">Expected annual rate (%)</label>
+            <input id="accountRate" type="number" step="0.01" placeholder="e.g. 4.4" />
+          </div>
+          <div>
+            <label for="monthlyContribution">Monthly contribution (£)</label>
+            <input id="monthlyContribution" type="number" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="monthlyWithdrawal">Monthly withdrawal (£)</label>
+            <input id="monthlyWithdrawal" type="number" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="primary" onclick="addAccount()">Add account</button>
+          <button class="secondary" onclick="loadSampleData()">Load sample data</button>
+          <button class="danger" onclick="resetData()">Reset all data</button>
+        </div>
+        <p class="small">Your data is saved on this device only. It is not linked to your bank and is not uploaded anywhere by the app.</p>
+      </div>
+
+      <div class="card">
+        <h2>Your accounts</h2>
+        <div id="accountsTable"></div>
+      </div>
+    </section>
+
+    <section id="spending">
+      <div class="card">
+        <h2>Add spending</h2>
+        <div class="form-grid">
+          <div>
+            <label for="spendDate">Date</label>
+            <input id="spendDate" type="date" />
+          </div>
+          <div>
+            <label for="spendCategory">Category</label>
+            <select id="spendCategory">
+              <option>Food</option>
+              <option>Household</option>
+              <option>Eating out</option>
+              <option>Car</option>
+              <option>Holiday</option>
+              <option>Bills</option>
+              <option>Health</option>
+              <option>Entertainment</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="spendAmount">Amount (£)</label>
+            <input id="spendAmount" type="number" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="spendNote">Note</label>
+            <input id="spendNote" placeholder="Optional" />
+          </div>
+        </div>
+        <button class="primary" onclick="addSpending()">Add spending</button>
+      </div>
+
+      <div class="card">
+        <h2>Spending by category this month</h2>
+        <canvas id="spendChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Recent spending</h2>
+        <div id="spendingTable"></div>
+      </div>
+    </section>
+
+    <section id="forecast">
+      <div class="card">
+        <h2>Forecast settings</h2>
+        <div class="form-grid">
+          <div>
+            <label for="forecastYears">Forecast length (years)</label>
+            <input id="forecastYears" type="number" min="1" max="40" value="10" />
+          </div>
+          <div>
+            <label for="inflationRate">Optional inflation estimate (%)</label>
+            <input id="inflationRate" type="number" step="0.1" value="2.5" />
+          </div>
+        </div>
+        <button class="primary" onclick="renderAll()">Update forecast</button>
+        <p class="small">This is a simple compound forecast, not financial advice. Investment growth can go down as well as up.</p>
+      </div>
+
+      <div class="card">
+        <h2>Long-term forecast</h2>
+        <canvas id="longForecastChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Forecast summary</h2>
+        <div id="forecastSummary"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
