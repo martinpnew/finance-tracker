@@ -1,9 +1,8 @@
 # My Finance PWA
 
-Version 5 adds tax-aware forecasts and regular monthly costs.
+Version 6.
 
-- Tax-free/taxable setting on accounts
-- Simplified 20% UK basic-rate tax on taxable growth
-- Regular monthly costs deducted from forecasts
-- Spending entries remain separate
-- Same local storage key, so existing phone data should remain
+- Fixed regular spending add button
+- Merged regular costs and spending into one Spending tab
+- Regular monthly spending affects forecasts
+- Actual spending is tracked separately
