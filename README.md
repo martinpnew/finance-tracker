@@ -1,3 +1,7 @@
-# My Finance version 7 recovery release
+# My Finance PWA
 
-This release reads the existing financeTrackerPwaV2 data safely, preserves account owner data, adds missing taxFree fields automatically and includes an emergency backup button.
+Version 8.
+
+- Savings and investments excludes property and pension
+- Added 12-month projection breakdown
+- Forecast summary now separates after-tax growth and net monthly savings
