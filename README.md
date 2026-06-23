@@ -1,8 +1,3 @@
-# My Finance PWA
+# My Finance version 7 recovery release
 
-Version 6.
-
-- Fixed regular spending add button
-- Merged regular costs and spending into one Spending tab
-- Regular monthly spending affects forecasts
-- Actual spending is tracked separately
+This release reads the existing financeTrackerPwaV2 data safely, preserves account owner data, adds missing taxFree fields automatically and includes an emergency backup button.
