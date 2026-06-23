@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Finance recovery</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f6f8;color:#17202a;margin:0;padding:16px}
+    main{max-width:900px;margin:0 auto}
+    .card{background:#fff;border:1px solid #d9dde5;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 10px 30px rgba(16,24,40,.08)}
+    h1{margin-top:0;font-size:1.4rem} h2{font-size:1.1rem}
+    button{border:none;border-radius:12px;padding:11px 14px;font-weight:750;cursor:pointer;background:#2563eb;color:white;margin:4px 4px 4px 0}
+    .secondary{background:#eef2ff;color:#1e40af}
+    pre{white-space:pre-wrap;word-break:break-word;background:#f1f5f9;padding:12px;border-radius:12px;max-height:260px;overflow:auto;font-size:.82rem}
+    table{width:100%;border-collapse:collapse;font-size:.9rem} th,td{text-align:left;border-bottom:1px solid #d9dde5;padding:8px;vertical-align:top} th:last-child,td:last-child{text-align:right}
+    .good{color:#027a48;font-weight:800}.bad{color:#b42318;font-weight:800}.small{color:#667085;font-size:.9rem;line-height:1.45}
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>My Finance recovery</h1>
+    <p class="small">This page checks the browser storage used by My Finance. It does not change or delete anything unless you press Restore.</p>
+    <button onclick="scanStorage()">Scan storage</button>
+    <button class="secondary" onclick="downloadAllStorage()">Download all storage</button>
+  </div>
+  <div class="card"><h2>Recovery status</h2><div id="status">Scanning...</div></div>
+  <div class="card"><h2>Possible finance data found</h2><div id="found"></div></div>
+  <div class="card"><h2>All browser storage keys</h2><div id="keys"></div></div>
+  <div class="card"><h2>Raw data preview</h2><pre id="raw">Nothing scanned yet.</pre></div>
+</main>
+
+<script>
+const knownKeys = ["financeTrackerPwaV2","personalFinanceTrackerV1","myFinance","myFinanceV4","myFinanceV5","myFinanceV6"];
+
+function money(value){return new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP",maximumFractionDigits:0}).format(Number(value||0));}
+function safeParse(value){try{return JSON.parse(value)}catch{return null}}
+function escapeHtml(text){return String(text).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+
+function normaliseCandidate(key, parsed){
+  if(!parsed || typeof parsed !== "object") return null;
+  const data = parsed.data || parsed;
+  if(!data || typeof data !== "object") return null;
+  const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+  const spending = Array.isArray(data.spending) ? data.spending : [];
+  const costs = Array.isArray(data.costs) ? data.costs : [];
+  const snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
+  if(!accounts.length && !spending.length && !costs.length && !snapshots.length) return null;
+  return { key, data:{accounts, spending, costs, snapshots, preferences:data.preferences || {darkMode:false}} };
+}
+
+function scanStorage(){
+  const all = {};
+  const candidates = [];
+  for(let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    const value = localStorage.getItem(key);
+    all[key] = value;
+    const candidate = normaliseCandidate(key, safeParse(value));
+    if(candidate) candidates.push(candidate);
+  }
+  knownKeys.forEach(key => {
+    const value = localStorage.getItem(key);
+    if(value && !(key in all)){
+      all[key] = value;
+      const candidate = normaliseCandidate(key, safeParse(value));
+      if(candidate) candidates.push(candidate);
+    }
+  });
+
+  const unique = [];
+  const seen = new Set();
+  candidates.forEach(candidate => {
+    const sig = candidate.key + ":" + JSON.stringify(candidate.data.accounts);
+    if(!seen.has(sig)){ seen.add(sig); unique.push(candidate); }
+  });
+
+  document.getElementById("status").innerHTML = unique.length
+    ? `<p class="good">Found ${unique.length} possible finance data set(s).</p>`
+    : `<p class="bad">No finance data sets found in localStorage.</p><p class="small">Do not clear site data yet. Make sure you opened this page on the same phone and in Chrome.</p>`;
+
+  document.getElementById("keys").innerHTML = Object.keys(all).length
+    ? `<table><thead><tr><th>Key</th><th>Size</th></tr></thead><tbody>${Object.entries(all).map(([key,value])=>`<tr><td>${escapeHtml(key)}</td><td>${(value||"").length} chars</td></tr>`).join("")}</tbody></table>`
+    : `<p class="bad">No localStorage keys found.</p>`;
+
+  document.getElementById("found").innerHTML = unique.length
+    ? unique.map((candidate,index)=>renderCandidate(candidate,index)).join("")
+    : `<p class="small">No accounts, spending, costs or snapshots found.</p>`;
+
+  document.getElementById("raw").textContent = JSON.stringify(all,null,2);
+}
+
+function renderCandidate(candidate,index){
+  const accounts = candidate.data.accounts || [];
+  const spending = candidate.data.spending || [];
+  const costs = candidate.data.costs || [];
+  const snapshots = candidate.data.snapshots || [];
+  const total = accounts.reduce((sum,account)=>sum+Number(account.balance||0),0);
+  window["candidate_"+index] = candidate.data;
+  const rows = accounts.length
+    ? `<table><thead><tr><th>Name</th><th>Type</th><th>Balance</th></tr></thead><tbody>${accounts.map(a=>`<tr><td>${escapeHtml(a.name||"")}</td><td>${escapeHtml(a.type||"")}</td><td>${money(a.balance)}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="small">No accounts in this data set.</p>`;
+  return `<div class="card"><h2>Data from key: ${escapeHtml(candidate.key)}</h2><p><strong>Accounts:</strong> ${accounts.length} &nbsp; <strong>Total:</strong> ${money(total)}</p><p><strong>Actual spending:</strong> ${spending.length} &nbsp; <strong>Regular costs:</strong> ${costs.length} &nbsp; <strong>Snapshots:</strong> ${snapshots.length}</p>${rows}<button onclick="downloadCandidate(${index})">Download this backup</button><button class="secondary" onclick="restoreCandidate(${index})">Restore into My Finance</button></div>`;
+}
+
+function downloadCandidate(index){
+  const data = window["candidate_"+index];
+  downloadJson({app:"My Finance", recoveredAt:new Date().toISOString(), data}, "my-finance-recovered-backup.json");
+}
+
+function restoreCandidate(index){
+  const data = window["candidate_"+index];
+  if(!data) return;
+  if(!confirm("Restore this data into My Finance? This will replace the current My Finance data on this device.")) return;
+  localStorage.setItem("financeTrackerPwaV2", JSON.stringify(data));
+  alert("Restored. Now open My Finance again and refresh it.");
+}
+
+function downloadAllStorage(){
+  const all = {};
+  for(let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    all[key] = localStorage.getItem(key);
+  }
+  downloadJson({exportedAt:new Date().toISOString(), localStorage:all}, "my-finance-all-browser-storage.json");
+}
+
+function downloadJson(data, filename){
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+scanStorage();
+</script>
+</body>
+</html>
