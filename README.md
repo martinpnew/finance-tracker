@@ -1,11 +1,9 @@
 # My Finance PWA
 
-Version 4 updates:
+Version 5 adds tax-aware forecasts and regular monthly costs.
 
-- Renamed the app to My Finance
-- Added dark mode
-- Added coloured badges and icons for account types
-- Reworked dashboard around net worth
-- Added expandable asset breakdown with readable labels
-- Added monthly net worth snapshots
-- Kept the same local storage key so existing phone data should remain
+- Tax-free/taxable setting on accounts
+- Simplified 20% UK basic-rate tax on taxable growth
+- Regular monthly costs deducted from forecasts
+- Spending entries remain separate
+- Same local storage key, so existing phone data should remain
