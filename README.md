@@ -1,7 +1,10 @@
 # My Finance PWA
 
-Version 8.
+Version 9.
 
-- Savings and investments excludes property and pension
-- Added 12-month projection breakdown
-- Forecast summary now separates after-tax growth and net monthly savings
+## Changes
+
+- Moved Balance by account type to the top of the dashboard
+- Removed the obsolete Forecast assumptions card
+- Combined Recovery status and Emergency backup into one lower dashboard section
+- Kept the recovery-safe data handling from previous versions
